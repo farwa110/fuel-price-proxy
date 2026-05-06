@@ -279,7 +279,8 @@ function mapFuelType(name = "") {
 // ─── Parse city from address string ──────────────────────────────────────────
 // Address format: "Frederikssundsvej 349 Brønshøj 2700 Danmark"
 // City is the word before the postal code (4 digits)
-function parseCity(address = "") {
+function parseCity(address) {
+  if (!address || typeof address !== "string") return "Danmark";
   const parts = address.trim().split(" ");
   const postalIndex = parts.findIndex((p) => /^\d{4}$/.test(p));
   if (postalIndex > 0) return parts[postalIndex - 1];
@@ -300,9 +301,9 @@ function groupByStation(flatRows) {
       map[id] = {
         stationId: id,
         brand: row.brand || "Q8/F24",
-        name: row.stationName || null, // real name from API
-        address: row.address || "",
-        city: parseCity(row.address),
+        name: row.stationName || row.name || "Q8 Station",
+        address: row.address || row.streetAddress || "",
+        city: parseCity(row.address || row.streetAddress),
         lat: row.latitude != null ? parseFloat(row.latitude) : null,
         lng: row.longitude != null ? parseFloat(row.longitude) : null,
         prices: {},
