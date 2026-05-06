@@ -442,33 +442,251 @@
 //   console.log(`⛽ Fuel proxy running on port ${PORT}`);
 // });
 
+// import express from "express";
+// import cors from "cors";
+
+// const app = express();
+// const PORT = process.env.PORT || 5000;
+
+// app.use(cors());
+
+// let cachedData = null;
+// let cacheTime = null;
+// const CACHE_DURATION = 10 * 60 * 1000;
+
+// async function fetchQ8Prices() {
+//   const res = await fetch("https://beta.q8.dk/Station/GetStationPrices?page=1&pageSize=2000");
+//   if (!res.ok) throw new Error(`Q8 API error: ${res.status}`);
+//   return res.json();
+// }
+
+// function mapFuelType(name = "") {
+//   const n = name.toLowerCase();
+//   if (n.includes("hvo") || n.includes("neste")) return "other";
+//   if (n.includes("hpc")) return "el";
+//   if (n.includes("95 extra") || n.includes("e5")) return "benzin95extra";
+//   if (n.includes("95") || n.includes("e10")) return "benzin95";
+//   if (n.includes("diesel extra")) return "dieselExtra";
+//   if (n.includes("diesel")) return "diesel";
+//   if (n.includes("el") || n.includes("electric") || n.includes("kwh")) return "el";
+//   return "other";
+// }
+
+// function parseCity(address) {
+//   if (!address || typeof address !== "string") return "Danmark";
+//   const parts = address.trim().split(" ");
+//   const postalIndex = parts.findIndex((p) => /^\d{4}$/.test(p));
+//   if (postalIndex > 0) return parts[postalIndex - 1];
+//   if (parts.length >= 3) return parts[parts.length - 3];
+//   return "Danmark";
+// }
+
+// // Handles ALL possible shapes the Q8 API might return
+// function normalizeToFlatRows(rawData) {
+//   // Shape 1: flat array of fuel-type rows
+//   // [{ stationId, stationName, address, fuelType, price, ... }]
+//   if (Array.isArray(rawData)) {
+//     return rawData;
+//   }
+
+//   // Shape 2: { data: { stationsPrices: [{ stationId, products: [...] }] } }
+//   if (rawData?.data?.stationsPrices) {
+//     return rawData.data.stationsPrices.flatMap((station) =>
+//       (station.products || []).map((product) => ({
+//         stationId: station.stationId,
+//         stationName: station.stationName || station.name,
+//         address: station.address || station.streetAddress,
+//         latitude: station.latitude || station.lat,
+//         longitude: station.longitude || station.lng,
+//         brand: "Q8/F24",
+//         fuelType: product.productName || product.fuelType || product.name,
+//         price: product.price,
+//         unit: product.unit,
+//         updatedAt: product.priceChangeDate || product.updatedAt,
+//       })),
+//     );
+//   }
+
+//   // Shape 3: top-level stationsPrices array
+//   if (rawData?.stationsPrices) {
+//     return rawData.stationsPrices.flatMap((station) =>
+//       (station.products || []).map((product) => ({
+//         stationId: station.stationId,
+//         stationName: station.stationName || station.name,
+//         address: station.address || station.streetAddress,
+//         latitude: station.latitude || station.lat,
+//         longitude: station.longitude || station.lng,
+//         brand: "Q8/F24",
+//         fuelType: product.productName || product.fuelType,
+//         price: product.price,
+//         unit: product.unit,
+//         updatedAt: product.priceChangeDate || product.updatedAt,
+//       })),
+//     );
+//   }
+
+//   // Unknown shape — return empty so we don't crash
+//   console.error("Unknown Q8 API shape:", JSON.stringify(rawData).slice(0, 300));
+//   return [];
+// }
+
+// function groupByStation(flatRows) {
+//   const map = {};
+//   for (const row of flatRows) {
+//     const id = String(row.stationId);
+//     if (!map[id]) {
+//       const addr = row.address || row.streetAddress || "";
+//       map[id] = {
+//         stationId: id,
+//         brand: row.brand || "Q8/F24",
+//         name: row.stationName || row.name || "Q8 Station",
+//         address: addr,
+//         city: parseCity(addr),
+//         lat: row.latitude != null ? parseFloat(row.latitude) : null,
+//         lng: row.longitude != null ? parseFloat(row.longitude) : null,
+//         prices: {},
+//         updatedAt: row.updatedAt,
+//       };
+//     }
+//     const key = mapFuelType(row.fuelType || "");
+//     if (!map[id].prices[key] || key !== "other") {
+//       map[id].prices[key] = {
+//         label: row.fuelType,
+//         price: parseFloat(row.price),
+//         unit: row.unit || "L",
+//       };
+//     }
+//   }
+//   return Object.values(map);
+// }
+
+// async function getStations() {
+//   const now = Date.now();
+//   if (cachedData && cacheTime && now - cacheTime < CACHE_DURATION) {
+//     return { stations: cachedData, fromCache: true };
+//   }
+//   const raw = await fetchQ8Prices();
+//   const rows = normalizeToFlatRows(raw);
+//   const stations = groupByStation(rows);
+//   cachedData = stations;
+//   cacheTime = Date.now();
+//   return { stations, fromCache: false };
+// }
+
+// function distanceKm(lat1, lng1, lat2, lng2) {
+//   const R = 6371,
+//     d2r = Math.PI / 180;
+//   const dLat = (lat2 - lat1) * d2r;
+//   const dLng = (lng2 - lng1) * d2r;
+//   const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * d2r) * Math.cos(lat2 * d2r) * Math.sin(dLng / 2) ** 2;
+//   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+// }
+
+// // ── Routes ────────────────────────────────────────────────────────────────────
+
+// app.get("/", (req, res) => res.json({ message: "⛽ Fuel proxy running" }));
+
+// // DEBUG: shows raw API shape + first 2 rows — remove after fixing
+// app.get("/debug", async (req, res) => {
+//   try {
+//     const raw = await fetchQ8Prices();
+//     const rows = normalizeToFlatRows(raw);
+//     res.json({
+//       rawType: Array.isArray(raw) ? "flat_array" : typeof raw,
+//       rawKeys: Array.isArray(raw) ? Object.keys(raw[0] || {}) : Object.keys(raw || {}),
+//       firstRawRow: Array.isArray(raw) ? raw[0] : raw,
+//       totalRows: rows.length,
+//       firstNormalizedRows: rows.slice(0, 2),
+//     });
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// });
+
+// app.get("/prices", async (req, res) => {
+//   try {
+//     const { stations, fromCache } = await getStations();
+//     res.json({
+//       cached: fromCache,
+//       updatedAt: new Date(cacheTime).toISOString(),
+//       source: "Q8/F24",
+//       count: stations.length,
+//       stations,
+//     });
+//   } catch (err) {
+//     res.status(500).json({ error: "Could not fetch prices", message: err.message });
+//   }
+// });
+
+// app.get("/prices/nearby", async (req, res) => {
+//   const { lat, lng, radius = 10 } = req.query;
+//   if (!lat || !lng) return res.status(400).json({ error: "lat and lng are required" });
+//   try {
+//     const { stations } = await getStations();
+//     const userLat = parseFloat(lat);
+//     const userLng = parseFloat(lng);
+//     const maxKm = parseFloat(radius);
+//     const nearby = stations
+//       .filter((s) => s.lat && s.lng)
+//       .map((s) => ({ ...s, distanceKm: parseFloat(distanceKm(userLat, userLng, s.lat, s.lng).toFixed(2)) }))
+//       .filter((s) => s.distanceKm <= maxKm)
+//       .sort((a, b) => a.distanceKm - b.distanceKm)
+//       .slice(0, 20);
+//     res.json({ updatedAt: new Date(cacheTime).toISOString(), count: nearby.length, stations: nearby });
+//   } catch (err) {
+//     res.status(500).json({ error: "Could not fetch nearby", message: err.message });
+//   }
+// });
+
+// app.get("/health", (req, res) =>
+//   res.json({
+//     status: "ok",
+//     cacheAge: cacheTime ? Math.round((Date.now() - cacheTime) / 1000) + "s ago" : "not loaded",
+//     stationCount: cachedData?.length || 0,
+//   }),
+// );
+
+// app.listen(PORT, () => console.log(`⛽ Fuel proxy running on port ${PORT}`));
+
 import express from "express";
 import cors from "cors";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-
 app.use(cors());
 
 let cachedData = null;
 let cacheTime = null;
 const CACHE_DURATION = 10 * 60 * 1000;
 
+// ─── Fetch prices (has products but name/address null for most) ───────────────
 async function fetchQ8Prices() {
   const res = await fetch("https://beta.q8.dk/Station/GetStationPrices?page=1&pageSize=2000");
-  if (!res.ok) throw new Error(`Q8 API error: ${res.status}`);
+  if (!res.ok) throw new Error(`Q8 prices error: ${res.status}`);
   return res.json();
 }
 
+// ─── Fetch station details (has name, address, lat, lng) ─────────────────────
+async function fetchQ8Stations() {
+  try {
+    const res = await fetch("https://beta.q8.dk/Station/GetStations?page=1&pageSize=2000");
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null; // non-fatal — prices still work without details
+  }
+}
+
+// ─── Map Q8 fuelType label → standard key ────────────────────────────────────
 function mapFuelType(name = "") {
   const n = name.toLowerCase();
-  if (n.includes("hvo") || n.includes("neste")) return "other";
+  if (n.includes("hvo") || n.includes("neste") || n.includes("adblue")) return "other";
   if (n.includes("hpc")) return "el";
   if (n.includes("95 extra") || n.includes("e5")) return "benzin95extra";
   if (n.includes("95") || n.includes("e10")) return "benzin95";
   if (n.includes("diesel extra")) return "dieselExtra";
   if (n.includes("diesel")) return "diesel";
-  if (n.includes("el") || n.includes("electric") || n.includes("kwh")) return "el";
+  if (n.includes("kwh") || n.includes("el") || n.includes("electric")) return "el";
   return "other";
 }
 
@@ -481,96 +699,68 @@ function parseCity(address) {
   return "Danmark";
 }
 
-// Handles ALL possible shapes the Q8 API might return
-function normalizeToFlatRows(rawData) {
-  // Shape 1: flat array of fuel-type rows
-  // [{ stationId, stationName, address, fuelType, price, ... }]
-  if (Array.isArray(rawData)) {
-    return rawData;
-  }
-
-  // Shape 2: { data: { stationsPrices: [{ stationId, products: [...] }] } }
-  if (rawData?.data?.stationsPrices) {
-    return rawData.data.stationsPrices.flatMap((station) =>
-      (station.products || []).map((product) => ({
-        stationId: station.stationId,
-        stationName: station.stationName || station.name,
-        address: station.address || station.streetAddress,
-        latitude: station.latitude || station.lat,
-        longitude: station.longitude || station.lng,
-        brand: "Q8/F24",
-        fuelType: product.productName || product.fuelType || product.name,
-        price: product.price,
-        unit: product.unit,
-        updatedAt: product.priceChangeDate || product.updatedAt,
-      })),
-    );
-  }
-
-  // Shape 3: top-level stationsPrices array
-  if (rawData?.stationsPrices) {
-    return rawData.stationsPrices.flatMap((station) =>
-      (station.products || []).map((product) => ({
-        stationId: station.stationId,
-        stationName: station.stationName || station.name,
-        address: station.address || station.streetAddress,
-        latitude: station.latitude || station.lat,
-        longitude: station.longitude || station.lng,
-        brand: "Q8/F24",
-        fuelType: product.productName || product.fuelType,
-        price: product.price,
-        unit: product.unit,
-        updatedAt: product.priceChangeDate || product.updatedAt,
-      })),
-    );
-  }
-
-  // Unknown shape — return empty so we don't crash
-  console.error("Unknown Q8 API shape:", JSON.stringify(rawData).slice(0, 300));
-  return [];
-}
-
-function groupByStation(flatRows) {
+// ─── Build station details map from GetStations response ─────────────────────
+function buildDetailsMap(stationsRaw) {
+  if (!stationsRaw) return {};
   const map = {};
-  for (const row of flatRows) {
-    const id = String(row.stationId);
-    if (!map[id]) {
-      const addr = row.address || row.streetAddress || "";
-      map[id] = {
-        stationId: id,
-        brand: row.brand || "Q8/F24",
-        name: row.stationName || row.name || "Q8 Station",
-        address: addr,
-        city: parseCity(addr),
-        lat: row.latitude != null ? parseFloat(row.latitude) : null,
-        lng: row.longitude != null ? parseFloat(row.longitude) : null,
-        prices: {},
-        updatedAt: row.updatedAt,
-      };
-    }
-    const key = mapFuelType(row.fuelType || "");
-    if (!map[id].prices[key] || key !== "other") {
-      map[id].prices[key] = {
-        label: row.fuelType,
-        price: parseFloat(row.price),
-        unit: row.unit || "L",
-      };
-    }
+
+  // Try common shapes
+  const list = stationsRaw?.data?.stations || stationsRaw?.stations || (Array.isArray(stationsRaw) ? stationsRaw : []);
+
+  for (const s of list) {
+    const id = String(s.stationId || s.id);
+    map[id] = {
+      name: s.stationName || s.name || null,
+      address: s.address || s.streetAddress || null,
+      lat: s.latitude != null ? parseFloat(s.latitude) : null,
+      lng: s.longitude != null ? parseFloat(s.longitude) : null,
+    };
   }
-  return Object.values(map);
+  return map;
 }
 
-async function getStations() {
-  const now = Date.now();
-  if (cachedData && cacheTime && now - cacheTime < CACHE_DURATION) {
-    return { stations: cachedData, fromCache: true };
+// ─── Main normalization ───────────────────────────────────────────────────────
+function normalizeData(pricesRaw, detailsMap) {
+  const stationsPrices = pricesRaw?.data?.stationsPrices || pricesRaw?.stationsPrices || (Array.isArray(pricesRaw) ? pricesRaw : []);
+
+  const map = {};
+
+  for (const station of stationsPrices) {
+    const id = String(station.stationId);
+    const details = detailsMap[id] || {};
+
+    // Prefer details endpoint for name/address/coords,
+    // fall back to what prices endpoint gives us
+    const name = details.name || station.stationName || null;
+    const address = details.address || station.address || null;
+    const lat = details.lat ?? (station.latitude != null ? parseFloat(station.latitude) : null);
+    const lng = details.lng ?? (station.longitude != null ? parseFloat(station.longitude) : null);
+
+    map[id] = {
+      stationId: id,
+      brand: "Q8/F24",
+      name: name || `Q8 #${id}`, // fallback: "Q8 #3081"
+      address: address || "",
+      city: parseCity(address),
+      lat,
+      lng,
+      prices: {},
+      updatedAt: null,
+    };
+
+    for (const product of station.products || []) {
+      const key = mapFuelType(product.productName || "");
+      if (key === "other") continue; // skip AdBlue, HVO etc
+      map[id].prices[key] = {
+        label: product.productName,
+        price: parseFloat(product.price),
+        unit: product.unit || "L",
+      };
+      if (!map[id].updatedAt) map[id].updatedAt = product.priceChangeDate;
+    }
   }
-  const raw = await fetchQ8Prices();
-  const rows = normalizeToFlatRows(raw);
-  const stations = groupByStation(rows);
-  cachedData = stations;
-  cacheTime = Date.now();
-  return { stations, fromCache: false };
+
+  return Object.values(map).filter((s) => Object.keys(s.prices).length > 0);
 }
 
 function distanceKm(lat1, lng1, lat2, lng2) {
@@ -582,21 +772,38 @@ function distanceKm(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+async function getStations() {
+  const now = Date.now();
+  if (cachedData && cacheTime && now - cacheTime < CACHE_DURATION) {
+    return { stations: cachedData, fromCache: true };
+  }
+
+  // Fetch both in parallel — details failure is non-fatal
+  const [pricesRaw, stationsRaw] = await Promise.all([fetchQ8Prices(), fetchQ8Stations()]);
+
+  const detailsMap = buildDetailsMap(stationsRaw);
+  const stations = normalizeData(pricesRaw, detailsMap);
+
+  cachedData = stations;
+  cacheTime = Date.now();
+  return { stations, fromCache: false };
+}
+
 // ── Routes ────────────────────────────────────────────────────────────────────
 
 app.get("/", (req, res) => res.json({ message: "⛽ Fuel proxy running" }));
 
-// DEBUG: shows raw API shape + first 2 rows — remove after fixing
+// Debug: check raw API shapes
 app.get("/debug", async (req, res) => {
   try {
-    const raw = await fetchQ8Prices();
-    const rows = normalizeToFlatRows(raw);
+    const [pricesRaw, stationsRaw] = await Promise.all([fetchQ8Prices(), fetchQ8Stations()]);
+    const detailsMap = buildDetailsMap(stationsRaw);
     res.json({
-      rawType: Array.isArray(raw) ? "flat_array" : typeof raw,
-      rawKeys: Array.isArray(raw) ? Object.keys(raw[0] || {}) : Object.keys(raw || {}),
-      firstRawRow: Array.isArray(raw) ? raw[0] : raw,
-      totalRows: rows.length,
-      firstNormalizedRows: rows.slice(0, 2),
+      pricesShape: Object.keys(pricesRaw || {}),
+      stationsShape: stationsRaw ? Object.keys(stationsRaw) : "endpoint not available",
+      detailsMapSize: Object.keys(detailsMap).length,
+      samplePrice: pricesRaw?.data?.stationsPrices?.[0],
+      sampleDetails: Object.values(detailsMap)[0] || null,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -623,9 +830,9 @@ app.get("/prices/nearby", async (req, res) => {
   if (!lat || !lng) return res.status(400).json({ error: "lat and lng are required" });
   try {
     const { stations } = await getStations();
-    const userLat = parseFloat(lat);
-    const userLng = parseFloat(lng);
-    const maxKm = parseFloat(radius);
+    const userLat = parseFloat(lat),
+      userLng = parseFloat(lng),
+      maxKm = parseFloat(radius);
     const nearby = stations
       .filter((s) => s.lat && s.lng)
       .map((s) => ({ ...s, distanceKm: parseFloat(distanceKm(userLat, userLng, s.lat, s.lng).toFixed(2)) }))
