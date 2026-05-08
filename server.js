@@ -153,10 +153,12 @@ async function normalizeCircleKSite(site) {
   const nameUpper = (site.name || "").toUpperCase();
   const brand = nameUpper.includes("INGO") ? "INGO" : "Circle K";
 
+  // const fullAddress = [site.address?.street, site.address?.postalCode, site.address?.city, "Danmark"].filter(Boolean).join(", ");
   const fullAddress = [site.address?.street, site.address?.postalCode, site.address?.city, "Danmark"].filter(Boolean).join(", ");
 
-  // const coords = await geocodeAddress(fullAddress);
-  const coords = geocodeCache.get(fullAddress) || { lat: null, lng: null };
+  // const coords = geocodeCache.get(fullAddress) || { lat: null, lng: null };
+  const coords = geocodeCache.get(fullAddress) || geocodeCache.get(fullAddress.replace("Danmark", "Denmark")) || geocodeCache.get(fullAddress.replace("Denmark", "Danmark")) || { lat: null, lng: null };
+  console.log("CK lookup:", fullAddress, geocodeCache.get(fullAddress));
   return {
     stationId: `ck-${site.id}`,
     brand,
